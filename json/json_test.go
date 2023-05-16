@@ -157,6 +157,30 @@ var testValues = [...]interface{}{
 	strings.Repeat("A", 250),
 	strings.Repeat("A", 1020),
 
+	// byte string
+	ByteString(nil),
+	ByteString("Hello World!"),
+	ByteString("Hello\"World!"),
+	ByteString("Hello\\World!"),
+	ByteString("Hello\nWorld!"),
+	ByteString("Hello\rWorld!"),
+	ByteString("Hello\tWorld!"),
+	ByteString("Hello\bWorld!"),
+	ByteString("Hello\fWorld!"),
+	ByteString("你好"),
+	ByteString("<"),
+	ByteString(">"),
+	ByteString("&"),
+	ByteString("\u001944"),
+	ByteString("\u00c2e>"),
+	ByteString("\u00c2V?"),
+	ByteString("\u000e=8"),
+	ByteString("\u001944\u00c2e>\u00c2V?\u000e=8"),
+	ByteString("ir\u001bQJ\u007f\u0007y\u0015)"),
+	ByteString(strings.Repeat("A", 32)),
+	ByteString(strings.Repeat("A", 250)),
+	ByteString(strings.Repeat("A", 1020)),
+
 	// bytes
 	[]byte(""),
 	[]byte("Hello World!"),
@@ -244,9 +268,13 @@ var testValues = [...]interface{}{
 	(*string)(nil),
 	new(int),
 
+	// jsonValue
+	NullOf[int](),
+	ValueOf(42),
+
 	// Marshaler/Unmarshaler
-	jsonValue{},
-	jsonValue{1, 2},
+	jsonMarshaler{},
+	jsonMarshaler{1, 2},
 
 	// encoding.TextMarshaler/encoding.TextUnmarshaler
 	textValue{},
@@ -546,16 +574,16 @@ func (buf *buffer) WriteString(s string) (int, error) {
 	return len(s), nil
 }
 
-type jsonValue struct {
+type jsonMarshaler struct {
 	x int32
 	y int32
 }
 
-func (v jsonValue) MarshalJSON() ([]byte, error) {
+func (v jsonMarshaler) MarshalJSON() ([]byte, error) {
 	return Marshal([2]int32{v.x, v.y})
 }
 
-func (v *jsonValue) UnmarshalJSON(b []byte) error {
+func (v *jsonMarshaler) UnmarshalJSON(b []byte) error {
 	var a [2]int32
 	err := Unmarshal(b, &a)
 	v.x = a[0]
@@ -594,12 +622,16 @@ func (d *duration) UnmarshalJSON(b []byte) error {
 }
 
 var (
-	_ Marshaler = jsonValue{}
+	_ jsonValue = Value[int]{}
+
+	_ Marshaler = Value[int]{}
+	_ Marshaler = jsonMarshaler{}
 	_ Marshaler = duration(0)
 
 	_ encoding.TextMarshaler = textValue{}
 
-	_ Unmarshaler = (*jsonValue)(nil)
+	_ Unmarshaler = (*Value[int])(nil)
+	_ Unmarshaler = (*jsonMarshaler)(nil)
 	_ Unmarshaler = (*duration)(nil)
 
 	_ encoding.TextUnmarshaler = (*textValue)(nil)

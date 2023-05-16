@@ -131,6 +131,12 @@ func (e encoder) encodeNumber(b []byte, p unsafe.Pointer) ([]byte, error) {
 	return append(b, n...), nil
 }
 
+func (e encoder) encodeByteString(b []byte, p unsafe.Pointer) ([]byte, error) {
+	bytes := []byte(*(*ByteString)(p))
+	s := unsafe.String(unsafe.SliceData(bytes), len(bytes))
+	return e.encodeString(b, unsafe.Pointer(&s))
+}
+
 func (e encoder) encodeString(b []byte, p unsafe.Pointer) ([]byte, error) {
 	s := *(*string)(p)
 	if len(s) == 0 {
@@ -870,6 +876,11 @@ func (e encoder) encodeRawMessage(b []byte, p unsafe.Pointer) ([]byte, error) {
 	}
 
 	return append(b, s...), nil
+}
+
+func (e encoder) encodeJSONValue(b []byte, p unsafe.Pointer, t reflect.Type, encode encodeFunc) ([]byte, error) {
+	hdr := (*valueHeader)(p)
+	return e.encodePointer(b, unsafe.Pointer(&hdr.value), t, encode)
 }
 
 func (e encoder) encodeJSONMarshaler(b []byte, p unsafe.Pointer, t reflect.Type, pointer bool) ([]byte, error) {

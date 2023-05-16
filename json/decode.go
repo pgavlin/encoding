@@ -276,6 +276,29 @@ func (d decoder) decodeNumber(b []byte, p unsafe.Pointer) ([]byte, error) {
 	return r, nil
 }
 
+func (d decoder) decodeByteString(b []byte, p unsafe.Pointer) ([]byte, error) {
+	if hasNullPrefix(b) {
+		return b[4:], nil
+	}
+
+	s, r, new, err := d.parseStringUnquote(b, nil)
+	if err != nil {
+		if len(b) == 0 || b[0] != '"' {
+			return d.inputError(b, stringType)
+		}
+		return r, err
+	}
+
+	bs := (*ByteString)(p)
+	if new || (d.flags&DontCopyString) != 0 {
+		*bs = ByteString(s)
+	} else {
+		*bs = ByteString(append([]byte(nil), s...))
+	}
+
+	return r, nil
+}
+
 func (d decoder) decodeString(b []byte, p unsafe.Pointer) ([]byte, error) {
 	if hasNullPrefix(b) {
 		return b[4:], nil
@@ -1373,6 +1396,12 @@ func (d decoder) decodeRawMessage(b []byte, p unsafe.Pointer) ([]byte, error) {
 
 	*(*RawMessage)(p) = json.RawMessage(v)
 	return r, err
+}
+
+func (d decoder) decodeJSONValue(b []byte, p unsafe.Pointer, t reflect.Type, decode decodeFunc) ([]byte, error) {
+	hdr := (*valueHeader)(p)
+	hdr.defined = true
+	return d.decodePointer(b, unsafe.Pointer(&hdr.value), t, decode)
 }
 
 func (d decoder) decodeJSONUnmarshaler(b []byte, p unsafe.Pointer, t reflect.Type, pointer bool) ([]byte, error) {

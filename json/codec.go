@@ -101,6 +101,9 @@ func constructCodec(t reflect.Type, seen map[reflect.Type]*structType, canAddr b
 	case bytesType:
 		c = codec{encode: encoder.encodeBytes, decode: decoder.decodeBytes}
 
+	case byteStringType:
+		c = codec{encode: encoder.encodeByteString, decode: decoder.decodeByteString}
+
 	case durationType:
 		c = codec{encode: encoder.encodeDuration, decode: decoder.decodeDuration}
 
@@ -196,6 +199,11 @@ func constructCodec(t reflect.Type, seen map[reflect.Type]*structType, canAddr b
 
 	default:
 		c = constructUnsupportedTypeCodec(t)
+	}
+
+	if t.Implements(jsonValueType) {
+		c = constructJSONValueCodec(t, seen)
+		return
 	}
 
 	p := reflect.PtrTo(t)
@@ -802,6 +810,27 @@ func constructUnsupportedTypeDecodeFunc(t reflect.Type) decodeFunc {
 	}
 }
 
+func constructJSONValueCodec(t reflect.Type, seen map[reflect.Type]*structType) codec {
+	e := reflect.New(t).Elem().Interface().(jsonValue).valueType()
+	c := constructCodec(e, seen, true)
+	return codec{
+		encode: constructJSONValueEncodeFunc(e, c.encode),
+		decode: constructJSONValueDecodeFunc(e, c.decode),
+	}
+}
+
+func constructJSONValueEncodeFunc(t reflect.Type, encode encodeFunc) encodeFunc {
+	return func(e encoder, b []byte, p unsafe.Pointer) ([]byte, error) {
+		return e.encodeJSONValue(b, p, t, encode)
+	}
+}
+
+func constructJSONValueDecodeFunc(t reflect.Type, decode decodeFunc) decodeFunc {
+	return func(d decoder, b []byte, p unsafe.Pointer) ([]byte, error) {
+		return d.decodeJSONValue(b, p, t, decode)
+	}
+}
+
 func constructJSONMarshalerEncodeFunc(t reflect.Type, pointer bool) encodeFunc {
 	return func(e encoder, b []byte, p unsafe.Pointer) ([]byte, error) {
 		return e.encodeJSONMarshaler(b, p, t, pointer)
@@ -942,6 +971,10 @@ func emptyFuncOf(t reflect.Type) emptyFunc {
 
 	case reflect.Interface:
 		return func(p unsafe.Pointer) bool { return (*iface)(p).ptr == nil }
+	}
+
+	if t.Implements(jsonValueType) {
+		return func(p unsafe.Pointer) bool { return !(*valueHeader)(p).defined }
 	}
 
 	return func(unsafe.Pointer) bool { return false }
@@ -1100,6 +1133,8 @@ var (
 	mapStringBoolType        = reflect.TypeOf((map[string]bool)(nil))
 
 	interfaceType       = reflect.TypeOf((*interface{})(nil)).Elem()
+	byteStringType      = reflect.TypeOf((ByteString)(nil))
+	jsonValueType       = reflect.TypeOf((*jsonValue)(nil)).Elem()
 	jsonMarshalerType   = reflect.TypeOf((*Marshaler)(nil)).Elem()
 	jsonUnmarshalerType = reflect.TypeOf((*Unmarshaler)(nil)).Elem()
 	textMarshalerType   = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
